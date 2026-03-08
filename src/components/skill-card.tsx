@@ -1,108 +1,246 @@
 "use client";
 
-import { useState } from "react";
-import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
+import { useMemo, useState } from "react";
+import { ChevronDown } from "lucide-react";
+import { cn } from "@/lib/utils";
 import type { SkillItem } from "@/types/skills";
 
-const typeStyles: Record<string, { bg: string; text: string }> = {
-  agent: { bg: "bg-blue-500/10 dark:bg-blue-500/20", text: "text-blue-600 dark:text-blue-400" },
-  skill: { bg: "bg-violet-500/10 dark:bg-violet-500/20", text: "text-violet-600 dark:text-violet-400" },
-  command: { bg: "bg-orange-500/10 dark:bg-orange-500/20", text: "text-orange-600 dark:text-orange-400" },
-  plugin: { bg: "bg-green-500/10 dark:bg-green-500/20", text: "text-green-600 dark:text-green-400" },
-  hook: { bg: "bg-yellow-500/10 dark:bg-yellow-500/20", text: "text-yellow-600 dark:text-yellow-400" },
+const typeStyles: Record<
+  SkillItem["type"],
+  {
+    chip: string;
+    ribbon: string;
+    glow: string;
+    tint: string;
+  }
+> = {
+  agent: {
+    chip: "border-cyan-900/20 bg-cyan-500/15 text-cyan-900 dark:border-cyan-200/30 dark:bg-cyan-400/20 dark:text-cyan-100",
+    ribbon: "from-cyan-400 via-cyan-500 to-cyan-700",
+    glow: "hover:shadow-[0_28px_55px_-42px_rgba(8,145,178,0.75)]",
+    tint: "bg-cyan-500/12",
+  },
+  skill: {
+    chip: "border-amber-900/20 bg-amber-500/18 text-amber-900 dark:border-amber-100/35 dark:bg-amber-400/22 dark:text-amber-100",
+    ribbon: "from-amber-300 via-amber-500 to-amber-700",
+    glow: "hover:shadow-[0_28px_55px_-42px_rgba(217,119,6,0.8)]",
+    tint: "bg-amber-500/14",
+  },
+  command: {
+    chip: "border-rose-900/20 bg-rose-500/16 text-rose-900 dark:border-rose-100/35 dark:bg-rose-400/20 dark:text-rose-100",
+    ribbon: "from-rose-300 via-rose-500 to-rose-700",
+    glow: "hover:shadow-[0_28px_55px_-42px_rgba(225,29,72,0.75)]",
+    tint: "bg-rose-500/12",
+  },
+  plugin: {
+    chip: "border-emerald-900/20 bg-emerald-500/16 text-emerald-900 dark:border-emerald-100/35 dark:bg-emerald-400/20 dark:text-emerald-100",
+    ribbon: "from-emerald-300 via-emerald-500 to-emerald-700",
+    glow: "hover:shadow-[0_28px_55px_-42px_rgba(5,150,105,0.8)]",
+    tint: "bg-emerald-500/12",
+  },
+  hook: {
+    chip: "border-blue-900/20 bg-blue-500/14 text-blue-900 dark:border-blue-100/35 dark:bg-blue-400/20 dark:text-blue-100",
+    ribbon: "from-blue-300 via-blue-500 to-blue-700",
+    glow: "hover:shadow-[0_28px_55px_-42px_rgba(37,99,235,0.8)]",
+    tint: "bg-blue-500/12",
+  },
 };
 
-const modelColors: Record<string, string> = {
-  sonnet: "bg-green-500",
-  opus: "bg-blue-500",
-  haiku: "bg-amber-500",
+const sourceLabels: Record<SkillItem["source"], string> = {
+  project: "Project",
+  global: "Global",
+  "built-in": "Built-in",
 };
 
-export function SkillCard({ item }: { item: SkillItem }) {
+const modelStyles: Record<string, string> = {
+  sonnet:
+    "border-cyan-900/20 bg-cyan-500/15 text-cyan-900 dark:border-cyan-100/30 dark:bg-cyan-400/22 dark:text-cyan-100",
+  opus:
+    "border-amber-900/20 bg-amber-500/18 text-amber-900 dark:border-amber-100/30 dark:bg-amber-400/22 dark:text-amber-100",
+  haiku:
+    "border-emerald-900/20 bg-emerald-500/16 text-emerald-900 dark:border-emerald-100/30 dark:bg-emerald-400/22 dark:text-emerald-100",
+};
+
+const pluginStatusStyles: Record<NonNullable<SkillItem["status"]>, string> = {
+  enabled:
+    "border-emerald-900/20 bg-emerald-500/16 text-emerald-900 dark:border-emerald-100/30 dark:bg-emerald-400/22 dark:text-emerald-100",
+  disabled:
+    "border-slate-900/20 bg-slate-500/14 text-slate-900 dark:border-slate-100/30 dark:bg-slate-400/22 dark:text-slate-100",
+};
+
+function previewText(text: string) {
+  if (text.length <= 130) return text;
+  return `${text.slice(0, 127).trimEnd()}...`;
+}
+
+export function SkillCard({ item, index = 0 }: { item: SkillItem; index?: number }) {
   const [expanded, setExpanded] = useState(false);
-  const style = typeStyles[item.type] ?? { bg: "bg-muted", text: "text-muted-foreground" };
+  const style = typeStyles[item.type];
+
+  const summary = useMemo(() => previewText(item.description), [item.description]);
 
   return (
-    <Card
-      className="cursor-pointer transition-all hover:ring-2 hover:ring-primary/30 data-[expanded=true]:ring-2 data-[expanded=true]:ring-primary/50"
+    <article
+      className={cn(
+        "reveal-up group relative overflow-hidden rounded-[1.45rem] border border-foreground/10 bg-[color:var(--panel-strong)]/90 p-4 text-sm text-[color:var(--ink-strong)] shadow-[0_24px_55px_-44px_rgba(15,26,44,0.85)] transition-all duration-500 hover:-translate-y-1",
+        style.glow,
+        expanded && "border-foreground/20 shadow-[0_26px_58px_-42px_rgba(15,26,44,0.95)]"
+      )}
+      style={{ animationDelay: `${Math.min(index * 45, 420)}ms` }}
       data-expanded={expanded}
-      onClick={() => setExpanded(!expanded)}
     >
-      <CardHeader>
-        <div className="flex items-center gap-2">
-          <span className={`inline-flex items-center rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${style.bg} ${style.text}`}>
+      <span
+        className={cn(
+          "pointer-events-none absolute inset-x-0 top-0 h-[3px] bg-gradient-to-r",
+          style.ribbon
+        )}
+      />
+      <span
+        className={cn(
+          "pointer-events-none absolute -right-10 -top-10 h-24 w-24 rounded-full blur-2xl",
+          style.tint
+        )}
+      />
+
+      <button
+        type="button"
+        onClick={() => setExpanded((prev) => !prev)}
+        aria-expanded={expanded}
+        className="w-full text-left focus-visible:outline-none"
+      >
+        <div className="flex items-start gap-3">
+          <span
+            className={cn(
+              "inline-flex h-6 shrink-0 items-center rounded-full border px-2.5 font-mono text-[10px] tracking-[0.12em] uppercase",
+              style.chip
+            )}
+          >
             {item.type}
           </span>
-          <CardTitle className="flex-1 truncate text-sm">
-            {item.displayName || item.name}
-          </CardTitle>
-          {item.model && (
-            <span
-              className={`h-2 w-2 shrink-0 rounded-full ${modelColors[item.model.toLowerCase()] ?? "bg-gray-400"}`}
-              title={item.model}
-            />
-          )}
+          <div className="min-w-0 flex-1">
+            <h3 className="truncate font-display text-[1.32rem] leading-tight text-[color:var(--ink-strong)]">
+              {item.displayName || item.name}
+            </h3>
+            <p className="mt-1 text-[13px] leading-relaxed text-[color:var(--ink-soft)]">
+              {expanded ? item.description : summary}
+            </p>
+          </div>
+          <span className="shrink-0 rounded-full border border-foreground/12 bg-white/45 px-2 py-1 font-mono text-[10px] uppercase tracking-[0.1em] text-[color:var(--ink-muted)]">
+            {expanded ? "Open" : "Peek"}
+          </span>
         </div>
-        <div className="flex items-center gap-1.5">
-          {item.domain && (
-            <Badge variant="secondary" className="text-[10px] h-4 px-1.5">
+
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          {item.domain ? (
+            <span className="inline-flex h-5 items-center rounded-full border border-foreground/10 bg-white/45 px-2.5 font-mono text-[10px] tracking-[0.08em] text-[color:var(--ink-soft)] uppercase">
               {item.domain}
-            </Badge>
-          )}
-          {item.source && (
-            <span className="text-[10px] italic text-muted-foreground">
-              {item.source}
             </span>
-          )}
+          ) : null}
+          <span className="inline-flex h-5 items-center rounded-full border border-foreground/10 bg-white/45 px-2.5 font-mono text-[10px] tracking-[0.08em] text-[color:var(--ink-soft)] uppercase">
+            {sourceLabels[item.source]}
+          </span>
+
+          {item.model ? (
+            <span
+              className={cn(
+                "inline-flex h-5 items-center rounded-full border px-2.5 font-mono text-[10px] tracking-[0.08em] uppercase",
+                modelStyles[item.model.toLowerCase()] ??
+                  "border-foreground/10 bg-white/45 text-[color:var(--ink-soft)]"
+              )}
+            >
+              {item.model}
+            </span>
+          ) : null}
+
+          {item.type === "plugin" && item.status ? (
+            <span
+              className={cn(
+                "inline-flex h-5 items-center rounded-full border px-2.5 font-mono text-[10px] tracking-[0.08em] uppercase",
+                pluginStatusStyles[item.status]
+              )}
+            >
+              {item.status}
+            </span>
+          ) : null}
+
+          {item.type === "plugin" && item.version ? (
+            <span className="inline-flex h-5 items-center rounded-full border border-foreground/10 bg-white/45 px-2.5 font-mono text-[10px] tracking-[0.08em] text-[color:var(--ink-soft)] uppercase">
+              v{item.version}
+            </span>
+          ) : null}
+
+          <span className="ml-auto inline-flex items-center gap-1.5 text-xs font-semibold text-[color:var(--ink-muted)]">
+            Details
+            <ChevronDown
+              className={cn(
+                "size-3.5 transition-transform duration-300",
+                expanded && "rotate-180"
+              )}
+            />
+          </span>
         </div>
-        {!expanded && item.description && (
-          <CardDescription className="truncate">
-            {item.description}
-          </CardDescription>
+      </button>
+
+      <div
+        className={cn(
+          "grid transition-all duration-400 ease-out",
+          expanded ? "mt-4 grid-rows-[1fr] opacity-100" : "mt-0 grid-rows-[0fr] opacity-0"
         )}
-      </CardHeader>
-
-      {expanded && (
-        <CardContent className="space-y-3 border-t pt-3">
-          <p className="text-sm text-foreground leading-relaxed">
-            {item.description}
-          </p>
-
-          {item.model && (
-            <div className="flex items-center gap-2">
-              <span className="text-xs font-semibold uppercase text-muted-foreground">Model</span>
-              <span className="text-xs">{item.model}</span>
-            </div>
-          )}
-
-          {(item.tools?.length ?? 0) > 0 && (
-            <div className="space-y-1">
-              <span className="text-xs font-semibold uppercase text-muted-foreground">Tools</span>
-              <div className="flex flex-wrap gap-1">
-                {item.tools.map((tool) => (
-                  <Badge key={tool} variant="outline" className="text-[10px] h-4 px-1.5">
-                    {tool}
-                  </Badge>
-                ))}
+      >
+        <div className="overflow-hidden">
+          <div className="space-y-3 rounded-xl border border-foreground/10 bg-white/35 p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.55)]">
+            {item.tools.length > 0 ? (
+              <div className="space-y-1.5">
+                <p className="font-mono text-[10px] tracking-[0.12em] text-[color:var(--ink-muted)] uppercase">
+                  Tools
+                </p>
+                <div className="flex flex-wrap gap-1.5">
+                  {item.tools.map((tool) => (
+                    <span
+                      key={tool}
+                      className="rounded-full border border-foreground/10 bg-[color:var(--panel)] px-2 py-1 font-mono text-[10px] text-[color:var(--ink-soft)]"
+                    >
+                      {tool}
+                    </span>
+                  ))}
+                </div>
               </div>
-            </div>
-          )}
+            ) : null}
 
-          {(item.keywords?.length ?? 0) > 0 && (
-            <div className="space-y-1">
-              <span className="text-xs font-semibold uppercase text-muted-foreground">Keywords</span>
-              <div className="flex flex-wrap gap-1">
-                {item.keywords?.map((kw) => (
-                  <Badge key={kw} variant="secondary" className="text-[10px] h-4 px-1.5">
-                    {kw}
-                  </Badge>
-                ))}
+            {item.keywords && item.keywords.length > 0 ? (
+              <div className="space-y-1.5">
+                <p className="font-mono text-[10px] tracking-[0.12em] text-[color:var(--ink-muted)] uppercase">
+                  Keywords
+                </p>
+                <div className="flex flex-wrap gap-1.5">
+                  {item.keywords.map((keyword) => (
+                    <span
+                      key={keyword}
+                      className="rounded-full border border-foreground/10 bg-[color:var(--panel)] px-2 py-1 font-mono text-[10px] text-[color:var(--ink-soft)]"
+                    >
+                      {keyword}
+                    </span>
+                  ))}
+                </div>
               </div>
-            </div>
-          )}
-        </CardContent>
-      )}
-    </Card>
+            ) : null}
+
+            {item.filePath ? (
+              <div className="space-y-1.5">
+                <p className="font-mono text-[10px] tracking-[0.12em] text-[color:var(--ink-muted)] uppercase">
+                  Source Path
+                </p>
+                <p
+                  className="truncate rounded-lg border border-foreground/10 bg-[color:var(--panel)] px-2.5 py-1.5 font-mono text-[11px] text-[color:var(--ink-soft)]"
+                  title={item.filePath}
+                >
+                  {item.filePath}
+                </p>
+              </div>
+            ) : null}
+          </div>
+        </div>
+      </div>
+    </article>
   );
 }

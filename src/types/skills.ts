@@ -9,6 +9,9 @@ export interface SkillItem {
   tools: string[];
   keywords?: string[];
   filePath?: string;
+  status?: "enabled" | "disabled";
+  version?: string;
+  pluginId?: string;
 }
 
 export interface SkillsData {
