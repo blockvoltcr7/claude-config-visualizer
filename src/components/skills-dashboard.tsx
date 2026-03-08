@@ -111,7 +111,7 @@ export function SkillsDashboard({ data: initialData }: { data: SkillsData }) {
             No .claude directory found
           </p>
           <p className="text-sm text-muted-foreground max-w-md mx-auto">
-            Create agents, skills, commands, or hooks in <code className="text-xs bg-muted px-1.5 py-0.5 rounded">~/.claude/</code> or <code className="text-xs bg-muted px-1.5 py-0.5 rounded">.claude/</code> in your project, then click Rescan.
+            Create agents, skills, commands, or hooks in <code className="text-xs bg-muted px-1.5 py-0.5 rounded">~/.claude/</code> then click Rescan.
           </p>
         </div>
       ) : (
