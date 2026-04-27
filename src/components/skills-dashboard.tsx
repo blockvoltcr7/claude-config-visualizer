@@ -139,6 +139,17 @@ export function SkillsDashboard({ data: initialData }: { data: SkillsData }) {
     [platform, platformFilteredItems.length, data]
   );
 
+  const pluginStatusCounts = useMemo(() => {
+    const visiblePlugins = data.plugins.filter(
+      (item) => platform === "all" || item.platform === platform
+    );
+
+    return {
+      installed: visiblePlugins.length,
+      enabled: visiblePlugins.filter((item) => item.status === "enabled").length,
+    };
+  }, [data.plugins, platform]);
+
   const uniqueDomains = useMemo(
     () =>
       new Set(
@@ -246,12 +257,12 @@ export function SkillsDashboard({ data: initialData }: { data: SkillsData }) {
         </p>
         <div className="mt-4 max-w-3xl space-y-3">
           <h1 className="font-display text-[clamp(2rem,4vw,3.5rem)] leading-[0.96] text-[color:var(--ink-strong)]">
-            Claude Skills Visualizer
+            Claude + Codex Skills Visualizer
           </h1>
           <p className="max-w-2xl text-[15px] leading-relaxed text-[color:var(--ink-soft)] md:text-base">
-            Explore every agent, skill, command, plugin, and hook in one
-            operational view. Filter quickly, inspect metadata, and rescan your
-            setup in real time.
+            Explore every agent, skill, command, plugin, and hook across Claude
+            and Codex in one operational view. Filter quickly, inspect
+            metadata, and rescan your setup in real time.
           </p>
         </div>
 
@@ -349,7 +360,9 @@ export function SkillsDashboard({ data: initialData }: { data: SkillsData }) {
                       active ? "text-white/70" : "text-[color:var(--ink-muted)]"
                     )}
                   >
-                    {counts[cat.key]} items
+                    {cat.key === "plugin"
+                      ? `${pluginStatusCounts.installed} installed · ${pluginStatusCounts.enabled} enabled`
+                      : `${counts[cat.key]} items`}
                   </span>
                 </span>
               </button>
