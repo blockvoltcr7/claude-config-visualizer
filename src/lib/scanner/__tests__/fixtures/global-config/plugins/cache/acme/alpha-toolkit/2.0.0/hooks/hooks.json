@@ -1,0 +1,13 @@
+{
+  "SessionStart": [
+    {
+      "matcher": "*",
+      "hooks": [
+        {
+          "type": "shell",
+          "command": "echo start"
+        }
+      ]
+    }
+  ]
+}

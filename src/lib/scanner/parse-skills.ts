@@ -1,11 +1,12 @@
 import fs from "fs/promises";
 import path from "path";
 import matter from "gray-matter";
-import type { SkillItem } from "@/types/skills";
+import type { Platform, SkillItem } from "@/types/skills";
 
 export async function parseSkills(
   dir: string,
-  source: "global" | "project"
+  source: "global" | "project",
+  platform: Platform = "claude"
 ): Promise<SkillItem[]> {
   const skillsDir = path.join(dir, "skills");
 
@@ -54,6 +55,7 @@ export async function parseSkills(
           name
             .replace(/[-_]/g, " ")
             .replace(/\b\w/g, (c: string) => c.toUpperCase()),
+        platform,
         type: "skill",
         description: typeof data.description === "string" ? data.description : "",
         model: typeof data.model === "string" ? data.model : null,

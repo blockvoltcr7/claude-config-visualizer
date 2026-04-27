@@ -1,20 +1,32 @@
 import { SkillsDashboard } from "@/components/skills-dashboard";
-import { scanClaudeConfig } from "@/lib/scanner";
+import { hasScannedData, scanClaudeConfig } from "@/lib/scanner";
 import staticData from "@/data/skills-data.json";
 import type { SkillsData } from "@/types/skills";
 
 export const dynamic = "force-dynamic";
 
+function addDefaultPlatform(data: SkillsData) {
+  const addPlatform = (items: SkillsData[keyof SkillsData]) =>
+    items.map((item) => ({
+      platform: "claude",
+      ...item,
+    }));
+
+  return {
+    agents: addPlatform(data.agents),
+    skills: addPlatform(data.skills),
+    commands: addPlatform(data.commands),
+    plugins: addPlatform(data.plugins),
+    hooks: addPlatform(data.hooks),
+  };
+}
+
 export default async function Home() {
   const scanned = await scanClaudeConfig();
-
-  const hasData =
-    scanned.agents.length > 0 ||
-    scanned.skills.length > 0 ||
-    scanned.commands.length > 0 ||
-    scanned.hooks.length > 0;
-
-  const data: SkillsData = hasData ? scanned : (staticData as SkillsData);
+  const normalizedScanned = addDefaultPlatform(scanned);
+  const data: SkillsData = hasScannedData(normalizedScanned)
+    ? normalizedScanned
+    : addDefaultPlatform(staticData as SkillsData);
 
   return <SkillsDashboard data={data} />;
 }

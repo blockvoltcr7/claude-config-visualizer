@@ -1,6 +1,6 @@
 import fs from "fs/promises";
 import path from "path";
-import type { SkillItem } from "@/types/skills";
+import type { Platform, SkillItem } from "@/types/skills";
 
 interface HookEntry {
   matcher?: string;
@@ -14,7 +14,8 @@ interface HookEntry {
 
 export async function parseHooks(
   dir: string,
-  source: "global" | "project"
+  source: "global" | "project",
+  platform: Platform = "claude"
 ): Promise<SkillItem[]> {
   const hooksPath = path.join(dir, "hooks", "hooks.json");
 
@@ -50,11 +51,12 @@ export async function parseHooks(
       ? `Matcher: ${matchers} (${typeSummary})`
       : typeSummary;
 
-    items.push({
-      name: eventName,
-      displayName: eventName,
-      type: "hook",
-      description,
+      items.push({
+        name: eventName,
+        displayName: eventName,
+        platform,
+        type: "hook",
+        description,
       model: null,
       domain: "",
       source,

@@ -14,11 +14,16 @@ import {
   RefreshCw,
   Search,
   Sparkles,
+  Terminal,
+  Trash2,
 } from "lucide-react";
 import { SkillCard } from "@/components/skill-card";
 import { Button } from "@/components/ui/button";
+import { getSkillItemStableKey } from "@/lib/skill-item-key";
 import { cn } from "@/lib/utils";
 import type { Category, SkillItem, SkillsData } from "@/types/skills";
+
+type PlatformFilter = "all" | "claude" | "codex";
 
 const categories: {
   key: Category;
@@ -33,10 +38,61 @@ const categories: {
   { key: "hook", label: "Hooks", icon: Link2 },
 ];
 
+const platformFilters: {
+  key: PlatformFilter;
+  label: string;
+}[] = [
+  { key: "all", label: "All Platforms" },
+  { key: "claude", label: "Claude" },
+  { key: "codex", label: "Codex" },
+];
+
+const removalGuides: Array<{
+  title: string;
+  label: string;
+  commands: string[];
+}> = [
+  {
+    title: "Claude Plugins",
+    label: "Disable or uninstall by plugin ID",
+    commands: [
+      "claude plugins list",
+      "claude plugins disable <plugin>@<marketplace>",
+      "claude plugins uninstall <plugin>@<marketplace>",
+    ],
+  },
+  {
+    title: "Codex Plugins",
+    label: "Disable in config, optionally clear cache",
+    commands: [
+      "~/.codex/config.toml => [plugins.\"<plugin>@<marketplace>\"] enabled = false",
+      "rm -rf ~/.codex/plugins/cache/<marketplace>/<plugin>",
+      "codex plugin marketplace remove <marketplace-name>",
+    ],
+  },
+  {
+    title: "Claude Skills",
+    label: "Remove skill folders",
+    commands: [
+      "rm -rf ~/.claude/skills/<skill-name>",
+      "rm -rf ./.claude/skills/<skill-name>",
+    ],
+  },
+  {
+    title: "Codex Skills",
+    label: "Remove skill folders",
+    commands: [
+      "rm -rf ~/.codex/skills/<skill-name>",
+      "rm -rf ./.codex/skills/<skill-name>",
+    ],
+  },
+];
+
 export function SkillsDashboard({ data: initialData }: { data: SkillsData }) {
   const [data, setData] = useState(initialData);
   const [search, setSearch] = useState("");
   const [category, setCategory] = useState<Category>("all");
+  const [platform, setPlatform] = useState<PlatformFilter>("all");
   const [rescanning, setRescanning] = useState(false);
 
   const rescan = useCallback(async () => {
@@ -63,17 +119,36 @@ export function SkillsDashboard({ data: initialData }: { data: SkillsData }) {
     [data]
   );
 
+  const platformFilteredItems = useMemo(
+    () =>
+      platform === "all"
+        ? allItems
+        : allItems.filter((item) => item.platform === platform),
+    [allItems, platform]
+  );
+
   const counts = useMemo(
     () => ({
-      all: allItems.length,
-      agent: data.agents.length,
-      skill: data.skills.length,
-      command: data.commands.length,
-      plugin: data.plugins.length,
-      hook: data.hooks.length,
+      all: platformFilteredItems.length,
+      agent: data.agents.filter((item) => platform === "all" || item.platform === platform).length,
+      skill: data.skills.filter((item) => platform === "all" || item.platform === platform).length,
+      command: data.commands.filter((item) => platform === "all" || item.platform === platform).length,
+      plugin: data.plugins.filter((item) => platform === "all" || item.platform === platform).length,
+      hook: data.hooks.filter((item) => platform === "all" || item.platform === platform).length,
     }),
-    [allItems.length, data]
+    [platform, platformFilteredItems.length, data]
   );
+
+  const pluginStatusCounts = useMemo(() => {
+    const visiblePlugins = data.plugins.filter(
+      (item) => platform === "all" || item.platform === platform
+    );
+
+    return {
+      installed: visiblePlugins.length,
+      enabled: visiblePlugins.filter((item) => item.status === "enabled").length,
+    };
+  }, [data.plugins, platform]);
 
   const uniqueDomains = useMemo(
     () =>
@@ -103,8 +178,8 @@ export function SkillsDashboard({ data: initialData }: { data: SkillsData }) {
   const filtered = useMemo(() => {
     const categoryItems =
       category === "all"
-        ? allItems
-        : allItems.filter((item) => item.type === category);
+        ? platformFilteredItems
+        : platformFilteredItems.filter((item) => item.type === category);
 
     if (!search) {
       return categoryItems;
@@ -118,13 +193,16 @@ export function SkillsDashboard({ data: initialData }: { data: SkillsData }) {
         item.description.toLowerCase().includes(query) ||
         (item.domain ?? "").toLowerCase().includes(query) ||
         (item.pluginId ?? "").toLowerCase().includes(query) ||
+        (item.pluginDisplayName ?? "").toLowerCase().includes(query) ||
+        (item.pluginVersion ?? "").toLowerCase().includes(query) ||
         (item.status ?? "").toLowerCase().includes(query) ||
         (item.version ?? "").toLowerCase().includes(query) ||
+        item.platform.toLowerCase().includes(query) ||
         item.name.toLowerCase().includes(query) ||
         item.tools.some((tool) => tool.toLowerCase().includes(query)) ||
         item.keywords?.some((keyword) => keyword.toLowerCase().includes(query))
     );
-  }, [allItems, category, search]);
+  }, [platformFilteredItems, category, search]);
 
   const activeCategoryLabel = useMemo(
     () => categories.find((cat) => cat.key === category)?.label ?? "All Items",
@@ -179,12 +257,12 @@ export function SkillsDashboard({ data: initialData }: { data: SkillsData }) {
         </p>
         <div className="mt-4 max-w-3xl space-y-3">
           <h1 className="font-display text-[clamp(2rem,4vw,3.5rem)] leading-[0.96] text-[color:var(--ink-strong)]">
-            Claude Skills Visualizer
+            Claude + Codex Skills Visualizer
           </h1>
           <p className="max-w-2xl text-[15px] leading-relaxed text-[color:var(--ink-soft)] md:text-base">
-            Explore every agent, skill, command, plugin, and hook in one
-            operational view. Filter quickly, inspect metadata, and rescan your
-            setup in real time.
+            Explore every agent, skill, command, plugin, and hook across Claude
+            and Codex in one operational view. Filter quickly, inspect
+            metadata, and rescan your setup in real time.
           </p>
         </div>
 
@@ -225,7 +303,7 @@ export function SkillsDashboard({ data: initialData }: { data: SkillsData }) {
             <Search className="mr-2.5 size-4 text-[color:var(--ink-muted)] transition-colors group-focus-within:text-[color:var(--ink-strong)]" />
             <input
               type="search"
-              placeholder="Search name, description, domain, keywords, or tools"
+              placeholder="Search name, description, domain, keywords, platform, or tools"
               value={search}
               onChange={(event) => setSearch(event.target.value)}
               className="w-full bg-transparent text-[15px] text-[color:var(--ink-strong)] placeholder:text-[color:var(--ink-muted)] outline-none"
@@ -282,63 +360,127 @@ export function SkillsDashboard({ data: initialData }: { data: SkillsData }) {
                       active ? "text-white/70" : "text-[color:var(--ink-muted)]"
                     )}
                   >
-                    {counts[cat.key]} items
+                    {cat.key === "plugin"
+                      ? `${pluginStatusCounts.installed} installed · ${pluginStatusCounts.enabled} enabled`
+                      : `${counts[cat.key]} items`}
                   </span>
                 </span>
               </button>
             );
           })}
         </div>
+
+        <div className="mt-3 grid gap-2 sm:grid-cols-3 xl:grid-cols-6">
+          {platformFilters.map((platformFilter) => {
+            const active = platform === platformFilter.key;
+
+            return (
+              <button
+                key={platformFilter.key}
+                type="button"
+                onClick={() => setPlatform(platformFilter.key)}
+                className={cn(
+                  "group flex h-10 items-center justify-center rounded-2xl border px-3.5 text-sm font-semibold transition-all",
+                  active
+                    ? "border-transparent bg-[color:var(--ink-strong)] text-[color:var(--background)] shadow-[0_14px_30px_-22px_rgba(14,26,44,0.9)]"
+                    : "border-foreground/10 bg-[color:var(--panel-strong)]/65 text-[color:var(--ink-soft)] hover:-translate-y-0.5 hover:border-foreground/20 hover:text-[color:var(--ink-strong)]"
+                )}
+              >
+                {platformFilter.label}
+              </button>
+            );
+          })}
+        </div>
       </section>
 
-      <section
-        className="reveal-up mt-6"
-        style={{ animationDelay: "180ms" }}
-      >
-        <div className="mb-4 flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
-          <p className="font-display text-3xl leading-none text-[color:var(--ink-strong)]">
-            {filtered.length} Result{filtered.length === 1 ? "" : "s"}
-          </p>
-          <p className="font-mono text-[11px] tracking-[0.15em] text-[color:var(--ink-muted)] uppercase">
-            Active View: {activeCategoryLabel}
-          </p>
+      <section className="reveal-up mt-6 grid gap-5 xl:grid-cols-[minmax(0,1fr)_24rem]" style={{ animationDelay: "180ms" }}>
+        <div>
+          <div className="mb-4 flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
+            <p className="font-display text-3xl leading-none text-[color:var(--ink-strong)]">
+              {filtered.length} Result{filtered.length === 1 ? "" : "s"}
+            </p>
+            <p className="font-mono text-[11px] tracking-[0.15em] text-[color:var(--ink-muted)] uppercase">
+              Active View: {activeCategoryLabel}
+            </p>
+          </div>
+
+          {isEmpty ? (
+            <div className="rounded-[1.6rem] border border-foreground/12 bg-[color:var(--panel)]/90 px-6 py-14 text-center shadow-[0_24px_60px_-48px_rgba(14,26,44,0.8)]">
+              <p className="font-display text-3xl text-[color:var(--ink-strong)]">
+                No Config Items Found
+              </p>
+              <p className="mx-auto mt-3 max-w-xl text-[15px] leading-relaxed text-[color:var(--ink-soft)]">
+                Add agents, skills, commands, plugins, or hooks in your Claude
+                configuration, then run a rescan to populate this dashboard.
+              </p>
+            </div>
+          ) : filtered.length === 0 ? (
+            <div className="rounded-[1.6rem] border border-dashed border-foreground/20 bg-[color:var(--panel)]/75 px-6 py-12 text-center">
+              <p className="font-display text-2xl text-[color:var(--ink-strong)]">
+                No matches for this filter
+              </p>
+              <p className="mx-auto mt-2 max-w-lg text-sm text-[color:var(--ink-soft)]">
+                Adjust your search query or switch categories and platform to reveal more
+                entries.
+              </p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+              {filtered.map((item, index) => (
+                <SkillCard
+                  key={getSkillItemStableKey(item)}
+                  item={item}
+                  index={index}
+                />
+              ))}
+            </div>
+          )}
         </div>
 
-        {isEmpty ? (
-          <div className="rounded-[1.6rem] border border-foreground/12 bg-[color:var(--panel)]/90 px-6 py-14 text-center shadow-[0_24px_60px_-48px_rgba(14,26,44,0.8)]">
-            <p className="font-display text-3xl text-[color:var(--ink-strong)]">
-              No Config Items Found
-            </p>
-            <p className="mx-auto mt-3 max-w-xl text-[15px] leading-relaxed text-[color:var(--ink-soft)]">
-              Add agents, skills, commands, plugins, or hooks in your Claude
-              configuration, then run a rescan to populate this dashboard.
-            </p>
+        <aside className="xl:sticky xl:top-6 xl:self-start">
+          <div className="rounded-[1.6rem] border border-foreground/12 bg-[color:var(--panel)]/95 p-4 shadow-[0_24px_64px_-50px_rgba(14,26,44,0.8)] md:p-5">
+            <div className="mb-4 flex items-start justify-between gap-3">
+              <div>
+                <p className="font-mono text-[11px] tracking-[0.15em] text-[color:var(--ink-muted)] uppercase">
+                  Helpful CLI Hints
+                </p>
+                <h2 className="mt-1 font-display text-2xl leading-none text-[color:var(--ink-strong)]">
+                  Removal Guide
+                </h2>
+              </div>
+              <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-black/10 bg-white/60 text-[color:var(--signal-rose)]">
+                <Trash2 className="size-4" />
+              </span>
+            </div>
+
+            <div className="space-y-3">
+              {removalGuides.map((guide) => (
+                <article
+                  key={guide.title}
+                  className="rounded-2xl border border-foreground/10 bg-[color:var(--panel-strong)]/85 p-3.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.6)]"
+                >
+                  <p className="text-sm font-semibold text-[color:var(--ink-strong)]">
+                    {guide.title}
+                  </p>
+                  <p className="mt-0.5 text-xs text-[color:var(--ink-soft)]">
+                    {guide.label}
+                  </p>
+                  <div className="mt-2.5 space-y-1.5 rounded-xl border border-black/8 bg-white/45 p-2.5">
+                    {guide.commands.map((command) => (
+                      <p
+                        key={command}
+                        className="font-mono text-[11px] leading-relaxed break-words [overflow-wrap:anywhere] text-[color:var(--ink-strong)]"
+                      >
+                        <Terminal className="mr-1 inline size-3 align-[-0.075rem] text-[color:var(--ink-muted)]" />
+                        {command}
+                      </p>
+                    ))}
+                  </div>
+                </article>
+              ))}
+            </div>
           </div>
-        ) : filtered.length === 0 ? (
-          <div className="rounded-[1.6rem] border border-dashed border-foreground/20 bg-[color:var(--panel)]/75 px-6 py-12 text-center">
-            <p className="font-display text-2xl text-[color:var(--ink-strong)]">
-              No matches for this filter
-            </p>
-            <p className="mx-auto mt-2 max-w-lg text-sm text-[color:var(--ink-soft)]">
-              Adjust your search query or switch categories to reveal more
-              entries.
-            </p>
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
-            {filtered.map((item, index) => (
-              <SkillCard
-                key={
-                  item.type === "plugin"
-                    ? `${item.type}-${item.pluginId ?? `${item.name}@${item.domain ?? "unknown"}`}`
-                    : `${item.type}-${item.name}-${item.source}`
-                }
-                item={item}
-                index={index}
-              />
-            ))}
-          </div>
-        )}
+        </aside>
       </section>
     </main>
   );
