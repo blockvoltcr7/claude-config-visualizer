@@ -1,0 +1,6 @@
+{
+  "enabledPlugins": {
+    "alpha-toolkit@acme": false,
+    "disabled-suite@acme": false
+  }
+}

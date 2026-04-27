@@ -8,7 +8,7 @@ The scanner (`src/lib/scanner/`) is the core server-side subsystem. It reads the
 
 ```
 src/lib/scanner/
-├── index.ts           ← Orchestrator. Calls all parsers in parallel. Deduplicates.
+├── index.ts           ← Orchestrator. Calls direct parsers, scans enabled plugin bundles, deduplicates.
 ├── parse-agents.ts    ← Reads ~/.claude/agents/*.md  (gray-matter frontmatter)
 ├── parse-skills.ts    ← Reads ~/.claude/skills/*/skill.md  (gray-matter frontmatter)
 ├── parse-commands.ts  ← Reads ~/.claude/commands/*.md  (plain text extraction)
@@ -32,7 +32,8 @@ flowchart TD
     P2["parseSkills(globalDir, 'global')"]
     P3["parseCommands(globalDir, 'global')"]
     P4["parseHooks(globalDir, 'global')"]
-    P5["parsePlugins(globalDir, projectDir)"]
+    P5["parsePluginInventory(globalDir, projectDir)"]
+    P6["scan enabled plugin bundle dirs\nwith parseAgents/parseSkills/\nparseCommands/parseHooks"]
 
     DEDUP["deduplicate(agents)\ndeduplicate(skills)\ndeduplicate(commands)\ndeduplicate(plugins)\ndeduplicate(hooks)"]
 
@@ -47,7 +48,8 @@ flowchart TD
     PARALLEL --> P3
     PARALLEL --> P4
     PARALLEL --> P5
-    P1 & P2 & P3 & P4 & P5 --> DEDUP
+    P5 --> P6
+    P1 & P2 & P3 & P4 & P5 & P6 --> DEDUP
     DEDUP --> RETURN
     ENTRY -.->|"try/catch"| ERR
 ```
@@ -55,6 +57,7 @@ flowchart TD
 **Deduplication key:**
 - Standard items: `"${item.name}::${item.type}"`
 - Plugins: `"${item.pluginId}::plugin"` (pluginId = `name@marketplace`)
+- Plugin-origin items: `"${item.pluginId}::${item.name}::${item.type}"`
 
 ---
 
@@ -225,7 +228,7 @@ The most complex parser. It merges two independent data sources to produce a uni
 
 ```mermaid
 flowchart TD
-    START["parsePlugins(globalDir, projectDir)"]
+    START["parsePluginInventory(globalDir, projectDir)"]
 
     subgraph Concurrent["Promise.all()"]
         ENABLED["parseEnabledPlugins()\n────────────────────\nReads from:\n• globalDir/settings.json\n• globalDir/settings.local.json\n• projectDir/settings.json\n• projectDir/settings.local.json\n\nLater files override earlier\n(last-write-wins precedence)\n\nExtract: enabledPlugins object\n→ Map<pluginId, {enabled, source, filePath}>"]
@@ -237,16 +240,18 @@ flowchart TD
     LOOP["for each pluginId"]
     STATUS["status = enabledConfig.enabled\n? 'enabled' : 'disabled'"]
     META["description from:\n1. plugin.json description\n2. README.md first paragraph\n3. Fallback: 'PluginName plugin'"]
+    COUNTS["pluginCounts from selected release:\n• parseable skills/\n• commands/*.md\n• agents/*.md\n• hook events"]
     KEYWORDS["keywords = [\n  ...plugin.json keywords,\n  marketplace,\n  status,\n  version\n]"]
     SORT["Sort: enabled first,\nthen alphabetical by displayName"]
-    RETURN["return SkillItem[]"]
+    RETURN["return { enabledPlugins,\ninstalledPlugins,\nitems }"]
 
     START --> Concurrent
     ENABLED & INSTALLED --> MERGE
     MERGE --> LOOP
     LOOP --> STATUS
     STATUS --> META
-    META --> KEYWORDS
+    META --> COUNTS
+    COUNTS --> KEYWORDS
     KEYWORDS --> LOOP
     LOOP -->|"done"| SORT
     SORT --> RETURN
@@ -270,6 +275,15 @@ Plugin IDs use the format `name@marketplace`. The `parsePluginIdentity()` functi
 ### Version Selection
 
 When a plugin has multiple release directories (e.g. `1.0.0`, `1.2.0`, `2.0.0`), the parser selects the **most recently modified** one by comparing `fs.stat().mtimeMs`. This means the live installed version is always shown, even if older versions remain in the cache directory.
+
+### Enabled Bundle Materialization
+
+After plugin inventory is loaded, the orchestrator performs a second pass:
+
+- Only plugins with `enabled === true` are scanned for bundled items.
+- Each enabled plugin must also have an installed `releasePath`.
+- The existing parsers are run against that release root, so plugin bundles reuse the same parsing logic as top-level config directories.
+- Returned items are annotated with plugin provenance (`pluginId`, `pluginDisplayName`, `pluginVersion`) and preserve the plugin enablement scope (`global` or `project`) as their `source`.
 
 ---
 

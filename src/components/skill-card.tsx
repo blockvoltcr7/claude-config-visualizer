@@ -73,11 +73,27 @@ function previewText(text: string) {
   return `${text.slice(0, 127).trimEnd()}...`;
 }
 
+function formatCountChip(label: string, count: number) {
+  return `${count} ${label}${count === 1 ? "" : "s"}`;
+}
+
 export function SkillCard({ item, index = 0 }: { item: SkillItem; index?: number }) {
   const [expanded, setExpanded] = useState(false);
   const style = typeStyles[item.type];
 
   const summary = useMemo(() => previewText(item.description), [item.description]);
+  const pluginCountChips = useMemo(() => {
+    if (item.type !== "plugin" || !item.pluginCounts) {
+      return [];
+    }
+
+    return [
+      { label: "skill", count: item.pluginCounts.skills },
+      { label: "command", count: item.pluginCounts.commands },
+      { label: "agent", count: item.pluginCounts.agents },
+      { label: "hook", count: item.pluginCounts.hooks },
+    ].filter((entry) => entry.count > 0);
+  }, [item]);
 
   return (
     <article
@@ -139,6 +155,9 @@ export function SkillCard({ item, index = 0 }: { item: SkillItem; index?: number
           <span className="inline-flex h-5 items-center rounded-full border border-foreground/10 bg-white/45 px-2.5 font-mono text-[10px] tracking-[0.08em] text-[color:var(--ink-soft)] uppercase">
             {sourceLabels[item.source]}
           </span>
+          <span className="inline-flex h-5 items-center rounded-full border border-foreground/10 bg-white/45 px-2.5 font-mono text-[10px] tracking-[0.08em] text-[color:var(--ink-soft)] uppercase">
+            {item.platform === "codex" ? "Codex" : "Claude"}
+          </span>
 
           {item.model ? (
             <span
@@ -168,6 +187,23 @@ export function SkillCard({ item, index = 0 }: { item: SkillItem; index?: number
               v{item.version}
             </span>
           ) : null}
+
+          {item.type !== "plugin" && item.pluginDisplayName ? (
+            <span className="inline-flex h-5 items-center rounded-full border border-emerald-900/15 bg-emerald-500/12 px-2.5 font-mono text-[10px] tracking-[0.08em] text-emerald-900 uppercase dark:border-emerald-100/25 dark:bg-emerald-400/20 dark:text-emerald-100">
+              From {item.pluginDisplayName}
+            </span>
+          ) : null}
+
+          {item.type === "plugin" && pluginCountChips.length > 0
+            ? pluginCountChips.map((entry) => (
+                <span
+                  key={entry.label}
+                  className="inline-flex h-5 items-center rounded-full border border-foreground/10 bg-white/45 px-2.5 font-mono text-[10px] tracking-[0.08em] text-[color:var(--ink-soft)]"
+                >
+                  {formatCountChip(entry.label, entry.count)}
+                </span>
+              ))
+            : null}
 
           <span className="ml-auto inline-flex items-center gap-1.5 text-xs font-semibold text-[color:var(--ink-muted)]">
             Details
@@ -219,6 +255,47 @@ export function SkillCard({ item, index = 0 }: { item: SkillItem; index?: number
                       className="rounded-full border border-foreground/10 bg-[color:var(--panel)] px-2 py-1 font-mono text-[10px] text-[color:var(--ink-soft)]"
                     >
                       {keyword}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            ) : null}
+
+            {item.type !== "plugin" && item.pluginDisplayName ? (
+              <div className="space-y-1.5">
+                <p className="font-mono text-[10px] tracking-[0.12em] text-[color:var(--ink-muted)] uppercase">
+                  Plugin Source
+                </p>
+                <div className="space-y-1">
+                  <p className="rounded-lg border border-foreground/10 bg-[color:var(--panel)] px-2.5 py-1.5 font-medium text-[color:var(--ink-strong)]">
+                    {item.pluginDisplayName}
+                  </p>
+                  {item.pluginId ? (
+                    <p className="truncate rounded-lg border border-foreground/10 bg-[color:var(--panel)] px-2.5 py-1.5 font-mono text-[11px] text-[color:var(--ink-soft)]">
+                      {item.pluginId}
+                    </p>
+                  ) : null}
+                  {item.pluginVersion ? (
+                    <p className="rounded-lg border border-foreground/10 bg-[color:var(--panel)] px-2.5 py-1.5 font-mono text-[11px] text-[color:var(--ink-soft)] uppercase">
+                      Plugin v{item.pluginVersion}
+                    </p>
+                  ) : null}
+                </div>
+              </div>
+            ) : null}
+
+            {item.type === "plugin" && pluginCountChips.length > 0 ? (
+              <div className="space-y-1.5">
+                <p className="font-mono text-[10px] tracking-[0.12em] text-[color:var(--ink-muted)] uppercase">
+                  Bundle Contents
+                </p>
+                <div className="flex flex-wrap gap-1.5">
+                  {pluginCountChips.map((entry) => (
+                    <span
+                      key={`${entry.label}-details`}
+                      className="rounded-full border border-foreground/10 bg-[color:var(--panel)] px-2 py-1 font-mono text-[10px] text-[color:var(--ink-soft)]"
+                    >
+                      {formatCountChip(entry.label, entry.count)}
                     </span>
                   ))}
                 </div>

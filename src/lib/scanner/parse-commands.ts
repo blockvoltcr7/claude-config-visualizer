@@ -1,10 +1,11 @@
 import fs from "fs/promises";
 import path from "path";
-import type { SkillItem } from "@/types/skills";
+import type { Platform, SkillItem } from "@/types/skills";
 
 export async function parseCommands(
   dir: string,
-  source: "global" | "project"
+  source: "global" | "project",
+  platform: Platform = "claude"
 ): Promise<SkillItem[]> {
   const commandsDir = path.join(dir, "commands");
 
@@ -50,6 +51,7 @@ export async function parseCommands(
       items.push({
         name,
         displayName,
+        platform,
         type: "command",
         description,
         model: null,

@@ -15,8 +15,10 @@ flowchart TD
             P2["parseSkills(globalDir)"]
             P3["parseCommands(globalDir)"]
             P4["parseHooks(globalDir)"]
-            P5["parsePlugins(globalDir, projectDir)"]
+            P5["parsePluginInventory(globalDir, projectDir)"]
         end
+
+        PB["Enabled plugin bundle scan\nusing the existing parsers"]
 
         D["deduplicate(items)\nfor each type"]
         E{"hasData?\nany array non-empty"}
@@ -53,6 +55,8 @@ flowchart TD
     P5 -->|"reads"| FS6
 
     Parsers --> D
+    P5 --> PB
+    PB --> D
     D --> E
     E -->|"yes"| F
     E -->|"no (empty)"| G
@@ -89,6 +93,9 @@ classDiagram
         +Status status
         +string version
         +string pluginId
+        +string pluginDisplayName
+        +string pluginVersion
+        +PluginCounts pluginCounts
     }
 
     class Type {
@@ -209,7 +216,21 @@ Merges both maps by pluginId (name@marketplace):
   - Both → merged with installed metadata taking priority for description/version
 
 Picks latest version by mtime when multiple release dirs exist.
-  →  SkillItem { type: "plugin", domain: marketplace, status, version, pluginId }
+Counts parseable bundle contents on the selected release.
+  →  SkillItem { type: "plugin", domain: marketplace, status, version, pluginId, pluginCounts }
+```
+
+### Enabled Plugin Bundles (`index.ts`)
+
+```
+For each enabled plugin with an installed release:
+  <release>/skills/*
+  <release>/commands/*
+  <release>/agents/*
+  <release>/hooks/hooks.json
+    ↓ existing parsers run against the release root
+    ↓ annotate each returned item with pluginId, pluginDisplayName, pluginVersion
+    → first-class SkillItem[] added into skills, commands, agents, hooks
 ```
 
 ---
@@ -220,7 +241,7 @@ Picks latest version by mtime when multiple release dirs exist.
 flowchart LR
     A["SkillItem[][]"] --> B["deduplicate(items)"]
     B --> C{{"seen Set<string>"}}
-    C --> D["Key = name::type\n(plugins: pluginId::type)"]
+    C --> D["Key = name::type\n(plugins: pluginId::plugin)\n(plugin items: pluginId::name::type)"]
     D --> E{{"Has key?"}}
     E -->|"No"| F["Add to seen\nKeep item"]
     E -->|"Yes"| G["Drop duplicate"]
@@ -228,7 +249,7 @@ flowchart LR
     G --> H
 ```
 
-The deduplication key for plugins uses `pluginId` (which is `name@marketplace`) rather than just `name` to allow plugins from different marketplaces with the same name to coexist.
+The deduplication key for plugins uses `pluginId` (which is `name@marketplace`) rather than just `name` to allow plugins from different marketplaces with the same name to coexist. Plugin-origin items add `pluginId` into their key so a direct skill and a plugin-bundled skill with the same `name` can both appear.
 
 ---
 

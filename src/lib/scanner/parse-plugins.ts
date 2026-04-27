@@ -1,16 +1,17 @@
 import fs from "fs/promises";
+import type { Dirent } from "fs";
 import path from "path";
-import type { SkillItem } from "@/types/skills";
+import type { Platform, PluginCounts, SkillItem } from "@/types/skills";
 
-type ScanSource = "global" | "project";
+export type ScanSource = "global" | "project";
 
-interface EnabledPluginConfig {
+export interface EnabledPluginConfig {
   enabled: boolean;
   source: ScanSource;
   filePath: string;
 }
 
-interface InstalledPluginMeta {
+export interface InstalledPluginMeta {
   pluginId: string;
   name: string;
   marketplace: string;
@@ -18,7 +19,17 @@ interface InstalledPluginMeta {
   version?: string;
   keywords: string[];
   filePath?: string;
+  releasePath: string;
+  pluginCounts: PluginCounts;
   mtimeMs: number;
+}
+
+type InstalledPluginCandidate = Omit<InstalledPluginMeta, "pluginCounts">;
+
+export interface PluginInventory {
+  enabledPlugins: Map<string, EnabledPluginConfig>;
+  installedPlugins: Map<string, InstalledPluginMeta>;
+  items: SkillItem[];
 }
 
 interface PluginIdentity {
@@ -104,7 +115,7 @@ async function readInstalledPluginCandidate(
   pluginName: string,
   marketplace: string,
   releaseDir: string
-): Promise<InstalledPluginMeta | null> {
+): Promise<InstalledPluginCandidate | null> {
   const pluginJsonPath = path.join(releasePath, ".claude-plugin", "plugin.json");
   const readmePath = path.join(releasePath, "README.md");
   const stat = await fs.stat(releasePath).catch(() => null);
@@ -140,6 +151,7 @@ async function readInstalledPluginCandidate(
     version: parseVersion(pluginJson?.version, releaseDir),
     keywords,
     filePath,
+    releasePath,
     mtimeMs: stat.mtimeMs,
   };
 }
@@ -205,7 +217,7 @@ async function parseInstalledPlugins(globalDir: string): Promise<Map<string, Ins
       if (!pluginStat?.isDirectory()) continue;
 
       const releaseDirs = await fs.readdir(pluginPath).catch(() => []);
-      let best: InstalledPluginMeta | null = null;
+      let best: InstalledPluginCandidate | null = null;
 
       for (const releaseDir of releaseDirs) {
         const releasePath = path.join(pluginPath, releaseDir);
@@ -223,7 +235,10 @@ async function parseInstalledPlugins(globalDir: string): Promise<Map<string, Ins
       }
 
       if (best) {
-        installed.set(best.pluginId, best);
+        installed.set(best.pluginId, {
+          ...best,
+          pluginCounts: await readPluginBundleCounts(best.releasePath),
+        });
       }
     }
   }
@@ -231,10 +246,79 @@ async function parseInstalledPlugins(globalDir: string): Promise<Map<string, Ins
   return installed;
 }
 
-export async function parsePlugins(
+async function countMarkdownFiles(dirPath: string): Promise<number> {
+  try {
+    const entries = await fs.readdir(dirPath, { withFileTypes: true });
+    return entries.filter((entry) => entry.isFile() && entry.name.endsWith(".md")).length;
+  } catch {
+    return 0;
+  }
+}
+
+async function countSkillDirectories(releasePath: string): Promise<number> {
+  const skillsDir = path.join(releasePath, "skills");
+
+  let entries: Dirent[];
+  try {
+    entries = await fs.readdir(skillsDir, { withFileTypes: true });
+  } catch {
+    return 0;
+  }
+
+  let count = 0;
+
+  for (const entry of entries) {
+    if (!entry.isDirectory()) continue;
+
+    try {
+      const dirFiles = await fs.readdir(path.join(skillsDir, entry.name));
+      if (dirFiles.some((file) => file.toLowerCase() === "skill.md")) {
+        count += 1;
+      }
+    } catch {
+      continue;
+    }
+  }
+
+  return count;
+}
+
+async function countHookEntries(releasePath: string): Promise<number> {
+  const hooksPath = path.join(releasePath, "hooks", "hooks.json");
+  const raw = await fs.readFile(hooksPath, "utf-8").catch(() => null);
+  if (!raw) {
+    return 0;
+  }
+
+  try {
+    const parsed = JSON.parse(raw) as Record<string, unknown>;
+    return Object.entries(parsed).filter(([, value]) => Array.isArray(value)).length;
+  } catch {
+    return 0;
+  }
+}
+
+async function readPluginBundleCounts(releasePath: string): Promise<PluginCounts> {
+  const [skills, commands, agents, hooks] = await Promise.all([
+    countSkillDirectories(releasePath),
+    countMarkdownFiles(path.join(releasePath, "commands")),
+    countMarkdownFiles(path.join(releasePath, "agents")),
+    countHookEntries(releasePath),
+  ]);
+
+  return {
+    skills,
+    commands,
+    agents,
+    hooks,
+  };
+}
+
+export async function parsePluginInventory(
   globalDir: string,
-  projectDir: string
-): Promise<SkillItem[]> {
+  projectDir: string,
+  platform: Platform = "claude"
+): Promise<PluginInventory> {
   const [enabledPlugins, installedPlugins] = await Promise.all([
     parseEnabledPlugins(globalDir, projectDir),
     parseInstalledPlugins(globalDir),
@@ -253,13 +337,15 @@ export async function parsePlugins(
     const identity = parsePluginIdentity(pluginId);
     const status: SkillItem["status"] = enabledConfig?.enabled ? "enabled" : "disabled";
     const version = installed?.version;
+    const displayName = toDisplayName(identity.name);
 
     items.push({
       name: identity.name,
-      displayName: toDisplayName(identity.name),
+      displayName,
+      platform,
       type: "plugin",
       description:
-        installed?.description || `${toDisplayName(identity.name)} plugin`,
+        installed?.description || `${displayName} plugin`,
       model: null,
       domain: identity.marketplace,
       source: enabledConfig?.source ?? "global",
@@ -274,14 +360,30 @@ export async function parsePlugins(
       status,
       version,
       pluginId: identity.pluginId,
+      pluginDisplayName: displayName,
+      pluginVersion: version,
+      pluginCounts: installed?.pluginCounts,
     });
   }
 
-  return items.sort((a, b) => {
-    const aStatus = a.status === "enabled" ? 0 : 1;
-    const bStatus = b.status === "enabled" ? 0 : 1;
-    if (aStatus !== bStatus) return aStatus - bStatus;
+  return {
+    enabledPlugins,
+    installedPlugins,
+    items: items.sort((a, b) => {
+      const aStatus = a.status === "enabled" ? 0 : 1;
+      const bStatus = b.status === "enabled" ? 0 : 1;
+      if (aStatus !== bStatus) return aStatus - bStatus;
 
-    return a.displayName.localeCompare(b.displayName);
-  });
+      return a.displayName.localeCompare(b.displayName);
+    }),
+  };
+}
+
+export async function parsePlugins(
+  globalDir: string,
+  projectDir: string,
+  platform: Platform = "claude"
+): Promise<SkillItem[]> {
+  const inventory = await parsePluginInventory(globalDir, projectDir, platform);
+  return inventory.items;
 }
