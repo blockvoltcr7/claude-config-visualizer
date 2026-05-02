@@ -47,7 +47,16 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Only SKILL.md files can be deleted" }, { status: 400 });
   }
 
+  const skillFileStat = await fs.stat(resolvedFilePath).catch(() => null);
+  if (!skillFileStat?.isFile()) {
+    return NextResponse.json({ error: "Skill file not found" }, { status: 404 });
+  }
+
   const skillDir = path.dirname(resolvedFilePath);
+  if (!allowedRoots.some((root) => isInside(root, skillDir))) {
+    return NextResponse.json({ error: "Skill directory is not deletable" }, { status: 403 });
+  }
+
   const skillDirName = path.basename(skillDir);
   if (skillDirName.startsWith(".")) {
     return NextResponse.json({ error: "System skills cannot be deleted" }, { status: 403 });
@@ -61,4 +70,3 @@ export async function POST(request: Request) {
   await fs.rm(skillDir, { recursive: true, force: true });
   return NextResponse.json({ ok: true, deletedPath: skillDir });
 }
-

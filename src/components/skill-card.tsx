@@ -354,7 +354,7 @@ export function SkillCard({ item, index = 0 }: { item: SkillItem; index?: number
               </div>
             ) : null}
 
-            {item.type === "skill" && item.filePath ? (
+            {item.type === "skill" && item.filePath && !item.pluginId ? (
               <div className="space-y-1.5">
                 <p className="font-mono text-[10px] tracking-[0.12em] text-[color:var(--ink-muted)] uppercase">
                   Actions
@@ -370,6 +370,21 @@ export function SkillCard({ item, index = 0 }: { item: SkillItem; index?: number
                 {deleteError ? (
                   <p className="text-xs text-[color:var(--signal-rose)]">{deleteError}</p>
                 ) : null}
+              </div>
+            ) : null}
+
+            {item.type === "skill" && item.pluginId ? (
+              <div className="space-y-1.5">
+                <p className="font-mono text-[10px] tracking-[0.12em] text-[color:var(--ink-muted)] uppercase">
+                  Actions
+                </p>
+                <p className="rounded-lg border border-foreground/10 bg-[color:var(--panel)] px-2.5 py-1.5 text-xs text-[color:var(--ink-soft)]">
+                  Managed by plugin. Disable or uninstall{" "}
+                  <span className="font-mono text-[11px] text-[color:var(--ink-strong)]">
+                    {item.pluginId}
+                  </span>{" "}
+                  to remove this skill.
+                </p>
               </div>
             ) : null}
           </div>
