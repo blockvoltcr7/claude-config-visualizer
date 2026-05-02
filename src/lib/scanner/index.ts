@@ -83,6 +83,13 @@ export async function scanClaudeConfigFromDirs(
   return scanConfigFromDirs(globalDir, projectDir, "claude");
 }
 
+export async function scanCodexConfigFromDirs(
+  globalDir: string,
+  projectDir: string
+): Promise<SkillsData> {
+  return scanConfigFromDirs(globalDir, projectDir, "codex");
+}
+
 async function scanConfigFromDirs(
   globalDir: string,
   projectDir: string,

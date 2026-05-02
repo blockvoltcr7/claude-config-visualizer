@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import type { LucideIcon } from "lucide-react";
 import {
   Bot,
@@ -107,6 +107,17 @@ export function SkillsDashboard({ data: initialData }: { data: SkillsData }) {
       setRescanning(false);
     }
   }, []);
+
+  useEffect(() => {
+    const handler = () => {
+      void rescan();
+    };
+
+    window.addEventListener("skills:rescan", handler);
+    return () => {
+      window.removeEventListener("skills:rescan", handler);
+    };
+  }, [rescan]);
 
   const allItems: SkillItem[] = useMemo(
     () => [

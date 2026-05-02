@@ -110,6 +110,48 @@ async function readJsonFile(filePath: string): Promise<Record<string, unknown> |
   }
 }
 
+function parseCodexPluginSection(section: string): string | null {
+  const match = section.match(
+    /^\s*plugins\s*\.\s*(?:"([^"]+)"|'([^']+)')\s*$/
+  );
+  if (!match) {
+    return null;
+  }
+
+  return match[1] ?? match[2] ?? null;
+}
+
+function parseCodexEnabledPluginsFromToml(raw: string): Map<string, boolean> {
+  const enabledPlugins = new Map<string, boolean>();
+  let activePluginId: string | null = null;
+
+  for (const line of raw.split(/\r?\n/)) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith("#")) {
+      continue;
+    }
+
+    const sectionMatch = trimmed.match(/^\[(.+)\]$/);
+    if (sectionMatch) {
+      activePluginId = parseCodexPluginSection(sectionMatch[1]);
+      continue;
+    }
+
+    if (!activePluginId) {
+      continue;
+    }
+
+    const enabledMatch = trimmed.match(/^enabled\s*=\s*(true|false)\b/i);
+    if (!enabledMatch) {
+      continue;
+    }
+
+    enabledPlugins.set(activePluginId, enabledMatch[1].toLowerCase() === "true");
+  }
+
+  return enabledPlugins;
+}
+
 async function readInstalledPluginCandidate(
   releasePath: string,
   pluginName: string,
@@ -158,9 +200,10 @@ async function readInstalledPluginCandidate(
 
 async function parseEnabledPlugins(
   globalDir: string,
-  projectDir: string
+  projectDir: string,
+  platform: Platform
 ): Promise<Map<string, EnabledPluginConfig>> {
-  const precedenceFiles: Array<{ filePath: string; source: ScanSource }> = [
+  const jsonPrecedenceFiles: Array<{ filePath: string; source: ScanSource }> = [
     { filePath: path.join(globalDir, "settings.json"), source: "global" },
     { filePath: path.join(globalDir, "settings.local.json"), source: "global" },
     { filePath: path.join(projectDir, "settings.json"), source: "project" },
@@ -169,7 +212,7 @@ async function parseEnabledPlugins(
 
   const enabledPlugins = new Map<string, EnabledPluginConfig>();
 
-  for (const file of precedenceFiles) {
+  for (const file of jsonPrecedenceFiles) {
     const parsed = await readJsonFile(file.filePath);
     if (!parsed) continue;
 
@@ -187,6 +230,28 @@ async function parseEnabledPlugins(
         source: file.source,
         filePath: file.filePath,
       });
+    }
+  }
+
+  if (platform === "codex") {
+    const tomlPrecedenceFiles: Array<{ filePath: string; source: ScanSource }> = [
+      { filePath: path.join(globalDir, "config.toml"), source: "global" },
+      { filePath: path.join(projectDir, "config.toml"), source: "project" },
+    ];
+
+    for (const file of tomlPrecedenceFiles) {
+      const raw = await fs.readFile(file.filePath, "utf-8").catch(() => null);
+      if (!raw) continue;
+
+      const parsedToml = parseCodexEnabledPluginsFromToml(raw);
+      for (const [rawPluginId, rawEnabled] of parsedToml.entries()) {
+        const identity = parsePluginIdentity(rawPluginId);
+        enabledPlugins.set(identity.pluginId, {
+          enabled: rawEnabled,
+          source: file.source,
+          filePath: file.filePath,
+        });
+      }
     }
   }
 
@@ -320,7 +385,7 @@ export async function parsePluginInventory(
   platform: Platform = "claude"
 ): Promise<PluginInventory> {
   const [enabledPlugins, installedPlugins] = await Promise.all([
-    parseEnabledPlugins(globalDir, projectDir),
+    parseEnabledPlugins(globalDir, projectDir, platform),
     parseInstalledPlugins(globalDir),
   ]);
 

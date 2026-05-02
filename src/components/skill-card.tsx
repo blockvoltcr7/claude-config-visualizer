@@ -79,6 +79,8 @@ function formatCountChip(label: string, count: number) {
 
 export function SkillCard({ item, index = 0 }: { item: SkillItem; index?: number }) {
   const [expanded, setExpanded] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
   const style = typeStyles[item.type];
 
   const summary = useMemo(() => previewText(item.description), [item.description]);
@@ -94,6 +96,42 @@ export function SkillCard({ item, index = 0 }: { item: SkillItem; index?: number
       { label: "hook", count: item.pluginCounts.hooks },
     ].filter((entry) => entry.count > 0);
   }, [item]);
+
+  async function handleDeleteSkill() {
+    if (!item.filePath || item.type !== "skill" || deleting) {
+      return;
+    }
+
+    const confirmed = window.confirm(
+      `Delete this skill folder?\n\n${item.filePath}`
+    );
+    if (!confirmed) {
+      return;
+    }
+
+    setDeleting(true);
+    setDeleteError(null);
+
+    try {
+      const response = await fetch("/api/skills/delete", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ filePath: item.filePath }),
+      });
+
+      if (!response.ok) {
+        const data = (await response.json().catch(() => null)) as { error?: string } | null;
+        throw new Error(data?.error ?? "Failed to delete skill");
+      }
+
+      window.dispatchEvent(new CustomEvent("skills:rescan"));
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Failed to delete skill";
+      setDeleteError(message);
+    } finally {
+      setDeleting(false);
+    }
+  }
 
   return (
     <article
@@ -313,6 +351,25 @@ export function SkillCard({ item, index = 0 }: { item: SkillItem; index?: number
                 >
                   {item.filePath}
                 </p>
+              </div>
+            ) : null}
+
+            {item.type === "skill" && item.filePath ? (
+              <div className="space-y-1.5">
+                <p className="font-mono text-[10px] tracking-[0.12em] text-[color:var(--ink-muted)] uppercase">
+                  Actions
+                </p>
+                <button
+                  type="button"
+                  onClick={handleDeleteSkill}
+                  disabled={deleting}
+                  className="inline-flex h-8 items-center rounded-lg border border-rose-900/20 bg-rose-500/14 px-3 font-mono text-[11px] tracking-[0.06em] text-rose-900 uppercase transition hover:bg-rose-500/20 disabled:cursor-not-allowed disabled:opacity-60 dark:border-rose-100/25 dark:bg-rose-400/20 dark:text-rose-100"
+                >
+                  {deleting ? "Deleting..." : "Delete Skill"}
+                </button>
+                {deleteError ? (
+                  <p className="text-xs text-[color:var(--signal-rose)]">{deleteError}</p>
+                ) : null}
               </div>
             ) : null}
           </div>

@@ -3,7 +3,11 @@ import os from "os";
 import path from "path";
 import { fileURLToPath } from "url";
 import { afterEach, describe, expect, it } from "vitest";
-import { hasScannedData, scanClaudeConfigFromDirs } from "@/lib/scanner";
+import {
+  hasScannedData,
+  scanClaudeConfigFromDirs,
+  scanCodexConfigFromDirs,
+} from "@/lib/scanner";
 import type { SkillsData } from "@/types/skills";
 
 const __filename = fileURLToPath(import.meta.url);
@@ -162,5 +166,37 @@ describe("plugin-aware bundle scanning", () => {
     };
 
     expect(hasScannedData(pluginOnly)).toBe(true);
+  });
+
+  it("parses Codex plugin enablement from TOML and materializes enabled bundles", async () => {
+    const { globalDir, projectDir } = await createFixtureWorkspace();
+    await fs.writeFile(
+      path.join(globalDir, "config.toml"),
+      [
+        '[plugins."alpha-toolkit@acme"]',
+        "enabled = true",
+        "",
+        '[plugins."disabled-suite@acme"]',
+        "enabled = false",
+        "",
+      ].join("\n"),
+      "utf-8"
+    );
+
+    const scanned = await scanCodexConfigFromDirs(globalDir, projectDir);
+    const alphaPlugin = scanned.plugins.find(
+      (item) => item.pluginId === "alpha-toolkit@acme"
+    );
+
+    expect(alphaPlugin).toMatchObject({
+      platform: "codex",
+      status: "enabled",
+      source: "global",
+    });
+    expect(
+      scanned.skills.some(
+        (item) => item.platform === "codex" && item.pluginId === "alpha-toolkit@acme"
+      )
+    ).toBe(true);
   });
 });
