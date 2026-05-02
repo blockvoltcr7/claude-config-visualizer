@@ -1,6 +1,16 @@
+export type Platform = "claude" | "codex";
+
+export interface PluginCounts {
+  skills: number;
+  commands: number;
+  agents: number;
+  hooks: number;
+}
+
 export interface SkillItem {
   name: string;
   displayName: string;
+  platform: Platform;
   type: "agent" | "skill" | "command" | "plugin" | "hook";
   description: string;
   model: string | null;
@@ -12,6 +22,9 @@ export interface SkillItem {
   status?: "enabled" | "disabled";
   version?: string;
   pluginId?: string;
+  pluginDisplayName?: string;
+  pluginVersion?: string;
+  pluginCounts?: PluginCounts;
 }
 
 export interface SkillsData {
