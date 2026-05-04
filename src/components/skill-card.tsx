@@ -133,6 +133,46 @@ export function SkillCard({ item, index = 0 }: { item: SkillItem; index?: number
     }
   }
 
+  async function handleDeletePlugin() {
+    if (!item.pluginId || item.type !== "plugin" || deleting) {
+      return;
+    }
+
+    const confirmed = window.confirm(
+      `Delete plugin ${item.pluginId}?\n\nThis removes cached plugin files and unsets its enablement from ${item.source} config.`
+    );
+    if (!confirmed) {
+      return;
+    }
+
+    setDeleting(true);
+    setDeleteError(null);
+
+    try {
+      const response = await fetch("/api/plugins/delete", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          pluginId: item.pluginId,
+          platform: item.platform,
+          source: item.source,
+        }),
+      });
+
+      if (!response.ok) {
+        const data = (await response.json().catch(() => null)) as { error?: string } | null;
+        throw new Error(data?.error ?? "Failed to delete plugin");
+      }
+
+      window.dispatchEvent(new CustomEvent("skills:rescan"));
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Failed to delete plugin";
+      setDeleteError(message);
+    } finally {
+      setDeleting(false);
+    }
+  }
+
   return (
     <article
       className={cn(
@@ -385,6 +425,25 @@ export function SkillCard({ item, index = 0 }: { item: SkillItem; index?: number
                   </span>{" "}
                   to remove this skill.
                 </p>
+              </div>
+            ) : null}
+
+            {item.type === "plugin" && item.pluginId ? (
+              <div className="space-y-1.5">
+                <p className="font-mono text-[10px] tracking-[0.12em] text-[color:var(--ink-muted)] uppercase">
+                  Actions
+                </p>
+                <button
+                  type="button"
+                  onClick={handleDeletePlugin}
+                  disabled={deleting}
+                  className="inline-flex h-8 items-center rounded-lg border border-rose-900/20 bg-rose-500/14 px-3 font-mono text-[11px] tracking-[0.06em] text-rose-900 uppercase transition hover:bg-rose-500/20 disabled:cursor-not-allowed disabled:opacity-60 dark:border-rose-100/25 dark:bg-rose-400/20 dark:text-rose-100"
+                >
+                  {deleting ? "Deleting..." : "Delete Plugin"}
+                </button>
+                {deleteError ? (
+                  <p className="text-xs text-[color:var(--signal-rose)]">{deleteError}</p>
+                ) : null}
               </div>
             ) : null}
           </div>

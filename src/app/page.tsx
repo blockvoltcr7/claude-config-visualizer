@@ -1,15 +1,23 @@
 import { SkillsDashboard } from "@/components/skills-dashboard";
 import { hasScannedData, scanClaudeConfig } from "@/lib/scanner";
 import staticData from "@/data/skills-data.json";
-import type { SkillsData } from "@/types/skills";
+import type { SkillItem, SkillsData } from "@/types/skills";
 
 export const dynamic = "force-dynamic";
 
-function addDefaultPlatform(data: SkillsData) {
-  const addPlatform = (items: SkillsData[keyof SkillsData]) =>
+type MaybePlatformSkillItem = Omit<SkillItem, "platform"> & {
+  platform?: SkillItem["platform"];
+};
+
+type MaybePlatformSkillsData = {
+  [K in keyof SkillsData]: MaybePlatformSkillItem[];
+};
+
+function addDefaultPlatform(data: MaybePlatformSkillsData): SkillsData {
+  const addPlatform = (items: MaybePlatformSkillItem[]): SkillItem[] =>
     items.map((item) => ({
-      platform: "claude",
       ...item,
+      platform: item.platform ?? "claude",
     }));
 
   return {
@@ -26,7 +34,7 @@ export default async function Home() {
   const normalizedScanned = addDefaultPlatform(scanned);
   const data: SkillsData = hasScannedData(normalizedScanned)
     ? normalizedScanned
-    : addDefaultPlatform(staticData as SkillsData);
+    : addDefaultPlatform(staticData as unknown as MaybePlatformSkillsData);
 
   return <SkillsDashboard data={data} />;
 }
